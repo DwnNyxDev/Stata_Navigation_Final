@@ -35,38 +35,53 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
+        //set screen contents as variables
         selectImageButton = findViewById(R.id.BSelectImage)
         previewImageView = findViewById(R.id.IVPreviewImage)
         textImageClass = findViewById(R.id.textView2)
+
+        //initialize text
         textImageClass.setText("No Image Loaded")
-
-
 
         // Register the ActivityResultLauncher
         imagePickerLauncher = registerForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
             uri?.let {
+                //set imageview to be selected image
                 previewImageView.setImageURI(it)
                 val `is` = contentResolver.openInputStream(uri!!)
+
+                //load stata-trained model from assets folder
                 val modelFilePath: String = assetFilePath(this, "epoch_10_scripted.pt")
                 val module = Module.load(modelFilePath)
 
+                //convert image to bitmap and preprocess it
                 var bitmap = BitmapFactory.decodeStream(`is`)
+
+                //scale image down to 256x256
                 bitmap = bitmap.scale(256, 256)
 
+                //center crop image to 224 x 224
                 val x = (bitmap.getWidth() - 224) / 2
                 val y = (bitmap.getHeight() - 224) / 2
 
                 bitmap = Bitmap.createBitmap(bitmap, x, y, 224, 224)
 
+                //Standard ImageNet means and stds
                 val mean = floatArrayOf(0.485f, 0.456f, 0.406f)
                 val std = floatArrayOf(0.229f, 0.224f, 0.225f)
 
-                // Convert bitmap to normalized tensor
+                // Convert bitmap to normalized tensor bc model must take in a Tensor
                 val inputTensor = TensorImageUtils.bitmapToFloat32Tensor(bitmap, mean, std)
 
+                //Pass image through model
                 val outputTensor = module.forward(IValue.from(inputTensor)).toTensor()
+
                 val scores = outputTensor.dataAsFloatArray
+
+                //convert scores to probabilities using softmax function
                 val probs = softmax(scores)
+
+                //find index of highest probability
                 var maxScore = -Float.MAX_VALUE
                 var maxScoreIdx = -1
                 for (i in 0..< probs.size) {
@@ -75,8 +90,12 @@ class MainActivity : ComponentActivity() {
                         maxScoreIdx = i
                     }
                 }
+
+                //Find highest probable class using index of highest probability
                 val classes = listOf("4th floor elevator", "4th floor entrance", "4th floor patio", "4th floor r&d pub", "4th floor stata")
                 val className: String = classes[maxScoreIdx]
+
+                //set text to highest probable class
                 textImageClass.setText(className)
 
                 `is`!!.close()
@@ -92,6 +111,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+//Converts logits into probabilities using softmax function
 fun softmax(logits: FloatArray): FloatArray {
     var max = Float.NEGATIVE_INFINITY
     for (`val` in logits) {

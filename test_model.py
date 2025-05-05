@@ -32,6 +32,7 @@ state = torch.load(model_path, map_location='cpu')
 model.load_state_dict(state['model_state_dict'])
 
 classes = state['class_names']
+print(classes)
 
 
 # Define an image preprocessing function

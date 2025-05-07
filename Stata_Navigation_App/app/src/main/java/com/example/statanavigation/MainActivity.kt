@@ -13,8 +13,9 @@ import androidx.activity.ComponentActivity
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.graphics.scale
+import org.json.JSONArray
 import org.pytorch.IValue
-//import org.pytorch.LiteModuleLoader
+import org.pytorch.LiteModuleLoader
 import org.pytorch.Module
 import org.pytorch.torchvision.TensorImageUtils
 import java.io.File
@@ -43,16 +44,17 @@ class MainActivity : ComponentActivity() {
         //initialize text
         textImageClass.setText("No Image Loaded")
 
+        //load stata-trained model from assets folder
+        val modelFilePath: String = assetFilePath(this, "model.ptl")
+        val module = LiteModuleLoader.load(modelFilePath)
+        val classNames = loadClassNames(this, "model_classes.json")
+
         // Register the ActivityResultLauncher
         imagePickerLauncher = registerForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
             uri?.let {
                 //set imageview to be selected image
                 previewImageView.setImageURI(it)
                 val `is` = contentResolver.openInputStream(uri!!)
-
-                //load stata-trained model from assets folder
-                val modelFilePath: String = assetFilePath(this, "epoch_10_scripted.pt")
-                val module = Module.load(modelFilePath)
 
                 //convert image to bitmap and preprocess it
                 var bitmap = BitmapFactory.decodeStream(`is`)
@@ -92,8 +94,8 @@ class MainActivity : ComponentActivity() {
                 }
 
                 //Find highest probable class using index of highest probability
-                val classes = listOf("4th floor elevator", "4th floor entrance", "4th floor patio", "4th floor r&d pub", "4th floor stata")
-                val className: String = classes[maxScoreIdx]
+
+                val className: String = classNames[maxScoreIdx]
 
                 //set text to highest probable class
                 textImageClass.setText(className)
@@ -130,6 +132,19 @@ fun softmax(logits: FloatArray): FloatArray {
         softmax[i] = (exps[i] / sum).toFloat()
     }
     return softmax
+}
+
+//Load in class names from json file
+fun loadClassNames(context: Context, fileName: String): List<String> {
+    val inputStream = context.assets.open(fileName)
+    val jsonStr = inputStream.bufferedReader().use { it.readText() }
+    val jsonArray = JSONArray(jsonStr)
+
+    val classNames = mutableListOf<String>()
+    for (i in 0 until jsonArray.length()) {
+        classNames.add(jsonArray.getString(i))
+    }
+    return classNames
 }
 
 // Copies the asset file to a real path and returns the File object
